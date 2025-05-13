@@ -1,0 +1,39 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solver-service
+  namespace: solver
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: solver-service
+  template:
+    metadata:
+      labels:
+        app: solver-service
+    spec:
+      containers:
+        - name: solver-service
+          # TODO: replace with your container registry path
+          image: gcr.io/<PROJECT_ID>/solver-service:latest
+          env:
+            - name: AIRBYTE_API_URL
+              value: "http://data-service.data.svc.cluster.local"
+            - name: AIRBYTE_WORKSPACE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: solver-service-secrets
+                  key: workspaceId
+            - name: SUPABASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: solver-service-config
+                  key: supabaseUrl
+            - name: SUPABASE_SERVICE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: solver-service-secrets
+                  key: supabaseServiceKey
+          ports:
+            - containerPort: 8080

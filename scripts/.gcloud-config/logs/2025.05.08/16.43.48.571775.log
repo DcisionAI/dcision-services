@@ -1,0 +1,50 @@
+2025-05-08 16:43:48,572 DEBUG    root            Loaded Command Group: ['gcloud', 'config']
+2025-05-08 16:43:48,573 DEBUG    root            Loaded Command Group: ['gcloud', 'config', 'config_helper']
+2025-05-08 16:43:48,574 DEBUG    root            Running [gcloud.config.config-helper] with arguments: [--format: "json"]
+2025-05-08 16:43:48,576 DEBUG    root            (gcloud.config.config-helper) You do not currently have an active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged in with a different account, run:
+
+  $ gcloud config set account ACCOUNT
+
+to select an already authenticated account to use.
+Traceback (most recent call last):
+  File "/opt/homebrew/Caskroom/google-cloud-sdk/520.0.0/google-cloud-sdk/lib/googlecloudsdk/calliope/cli.py", line 981, in Execute
+    resources = calliope_command.Run(cli=self, args=args)
+  File "/opt/homebrew/Caskroom/google-cloud-sdk/520.0.0/google-cloud-sdk/lib/googlecloudsdk/calliope/backend.py", line 934, in Run
+    resources = command_instance.Run(args)
+  File "/opt/homebrew/Caskroom/google-cloud-sdk/520.0.0/google-cloud-sdk/lib/surface/config/config_helper.py", line 99, in Run
+    cred = store.Load(use_google_auth=True)
+  File "/opt/homebrew/Caskroom/google-cloud-sdk/520.0.0/google-cloud-sdk/lib/googlecloudsdk/core/credentials/store.py", line 876, in Load
+    cred = _Load(
+  File "/opt/homebrew/Caskroom/google-cloud-sdk/520.0.0/google-cloud-sdk/lib/googlecloudsdk/core/credentials/store.py", line 1058, in _Load
+    raise creds_exceptions.NoActiveAccountException(
+googlecloudsdk.core.credentials.exceptions.NoActiveAccountException: You do not currently have an active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged in with a different account, run:
+
+  $ gcloud config set account ACCOUNT
+
+to select an already authenticated account to use.
+2025-05-08 16:43:48,579 ERROR    root            (gcloud.config.config-helper) You do not currently have an active account selected.
+Please run:
+
+  $ gcloud auth login
+
+to obtain new credentials.
+
+If you have already logged in with a different account, run:
+
+  $ gcloud config set account ACCOUNT
+
+to select an already authenticated account to use.

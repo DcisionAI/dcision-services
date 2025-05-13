@@ -1,0 +1,9 @@
+fastapi==0.109.2
+uvicorn==0.27.1
+ortools==9.7.2996
+numpy==1.26.2
+pydantic==2.6.1
+python-dotenv==1.0.1
+gunicorn==21.2.0
+python-multipart==0.0.5
+requests==2.31.0 

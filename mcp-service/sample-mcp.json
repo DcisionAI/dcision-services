@@ -1,0 +1,34 @@
+{
+  "sessionId": "sample-session-001",
+  "version": "1.0",
+  "created": "2025-05-10T12:00:00Z",
+  "lastModified": "2025-05-10T12:00:00Z",
+  "status": "pending",
+  "model": {
+    "variables": [
+      { "name": "vehicle_assignments", "type": "array", "description": "Vehicle→route assignments" },
+      { "name": "total_distance", "type": "number", "description": "Total distance traveled", "default": 0 }
+    ],
+    "constraints": [
+      { "type": "non_negativity", "description": "Assignments ≥ 0", "operator": "gte", "field": "vehicle_assignments", "value": 0 }
+    ],
+    "objective": { "type": "minimize", "field": "total_distance", "description": "Minimize travel distance" }
+  },
+  "context": {
+    "problemType": "vehicle_routing",
+    "industry": "logistics",
+    "environment": { "region": "us-central1", "timezone": "UTC" },
+    "dataset": { "internalSources": ["vehicles", "locations", "demands"] }
+  },
+  "protocol": {
+    "steps": [
+      { "action": "collect_data", "required": true },
+      { "action": "build_model", "required": true },
+      { "action": "solve_model", "required": true },
+      { "action": "explain_solution", "required": false }
+    ],
+    "allowPartialSolutions": true,
+    "explainabilityEnabled": true,
+    "humanInTheLoop": { "required": false }
+  }
+}

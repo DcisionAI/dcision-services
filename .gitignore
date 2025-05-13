@@ -1,0 +1,15 @@
+ # Dependencies
+ **/node_modules/
+ **/dist/
+
+ # Python
+ **/__pycache__/
+ **/venv/
+
+ # Environment
+.env
+airbyte-service/.env*
+
+ # Terraform state
+ *.tfstate
+ *.tfstate.backup

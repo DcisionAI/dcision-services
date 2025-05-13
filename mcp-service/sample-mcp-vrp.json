@@ -1,0 +1,58 @@
+{
+  "sessionId": "test-vrp-001",
+  "version": "1.0",
+  "created": "2025-05-10T12:00:00Z",
+  "lastModified": "2025-05-10T12:00:00Z",
+  "status": "pending",
+  "model": {
+    "vehicles": [
+      {
+        "id": 1,
+        "type": "standard",
+        "capacity": 1000.0,
+        "operating_cost": 1.0,
+        "maintenance_interval": 1000,
+        "fuel_efficiency": 1.0
+      }
+    ],
+    "tasks": [
+      {
+        "id": 1,
+        "location": { "id": 1, "latitude": 1.0, "longitude": 1.0, "name": "C1" },
+        "duration": 1.0,
+        "required_skills": [],
+        "priority": 1,
+        "time_window": [0.0, 10000.0]
+      }
+    ],
+    "locations": [
+      { "id": 0, "latitude": 0.0, "longitude": 0.0, "name": "Depot" },
+      { "id": 1, "latitude": 1.0, "longitude": 1.0, "name": "C1" }
+    ],
+    "distance_matrix": [
+      [0.0, 1.0],
+      [1.0, 0.0]
+    ],
+    "constraints": {
+      "max_distance": 1000.0,
+      "max_working_hours": 10000.0,
+      "vehicle_availability": [
+        { "start_time": 0.0, "end_time": 10000.0 }
+      ]
+    }
+  },
+  "context": {
+    "problemType": "vehicle_routing",
+    "industry": "logistics",
+    "environment": { "region": "local", "timezone": "UTC" },
+    "dataset": { "internalSources": [] }
+  },
+  "protocol": {
+    "steps": [
+      { "action": "solve_model", "required": true }
+    ],
+    "allowPartialSolutions": false,
+    "explainabilityEnabled": false,
+    "humanInTheLoop": { "required": false }
+  }
+}

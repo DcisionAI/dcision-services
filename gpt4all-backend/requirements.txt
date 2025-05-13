@@ -1,0 +1,4 @@
+fastapi
+uvicorn
+gpt4all==1.0.1
+google-cloud-storage 

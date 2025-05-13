@@ -1,0 +1,30 @@
+{
+  "sessionId": "test-lp-001",
+  "version": "1.0",
+  "created": "2025-05-10T12:00:00Z",
+  "lastModified": "2025-05-10T12:00:00Z",
+  "status": "pending",
+  "model": {
+    "variables": [
+      { "name": "x", "type": "continuous", "description": "Variable x", "lower_bound": 0, "upper_bound": 10 },
+      { "name": "y", "type": "continuous", "description": "Variable y", "lower_bound": 0, "upper_bound": 5 }
+    ],
+    "constraints": [
+      { "name": "c1", "expression": "x+y", "operator": "<=", "rhs": 10 },
+      { "name": "c2", "expression": "x+2*y", "operator": "<=", "rhs": 15 }
+    ],
+    "objective": { "type": "maximize", "expression": "x+2*y" }
+  },
+  "context": {
+    "problemType": "linear_programming",
+    "industry": "test",
+    "environment": { "region": "local", "timezone": "UTC" },
+    "dataset": { "internalSources": [] }
+  },
+  "protocol": {
+    "steps": [ { "action": "solve_model", "required": true } ],
+    "allowPartialSolutions": false,
+    "explainabilityEnabled": false,
+    "humanInTheLoop": { "required": false }
+  }
+}

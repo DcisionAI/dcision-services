@@ -1,0 +1,13 @@
+README.md
+setup.py
+solver_service.egg-info/PKG-INFO
+solver_service.egg-info/SOURCES.txt
+solver_service.egg-info/dependency_links.txt
+solver_service.egg-info/requires.txt
+solver_service.egg-info/top_level.txt
+src/__init__.py
+src/main.py
+src/api/__init__.py
+src/api/routes.py
+src/core/__init__.py
+src/core/solver.py
