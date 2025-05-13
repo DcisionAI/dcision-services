@@ -9,6 +9,7 @@
  # Environment
 .env
 .env.local
+.gcloud
 airbyte-service/.env*
 
  # Terraform state
