@@ -12,8 +12,19 @@ from src.core.templates import (
 )
 import uuid
 from datetime import datetime
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "https://platform.dcisionai.com",
+        "http://localhost:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 solver_service = SolverService()
 model_store = ModelStore()
 

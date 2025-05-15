@@ -1,6 +1,7 @@
 import express from 'express';
 import bodyParser from 'body-parser';
 import axios from 'axios';
+import cors from 'cors';
 
 // Basic MCP interfaces
 interface MCP {
@@ -23,6 +24,15 @@ interface OrchestrationResult {
 
 const app = express();
 app.use(bodyParser.json());
+app.use(cors({
+  origin: [
+    'https://platform.dcisionai.com',
+    'http://localhost:3000'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
 
 // Environment variable for solver-service URL
 const SOLVER_URL = process.env.SOLVER_SERVICE_URL || 'http://localhost:8080';

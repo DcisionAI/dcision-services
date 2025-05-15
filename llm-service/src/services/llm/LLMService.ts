@@ -24,7 +24,7 @@ export class LLMServiceImpl {
         throw new Error('Missing OPENAI_API_KEY environment variable');
       }
       this.client = new OpenAI({ apiKey });
-      this.model = 'gpt-4-turbo-preview';
+      this.model = ' gpt-4.1-nano';
     }
   }
 
