@@ -8,7 +8,8 @@ from src.core.templates import (
     VehicleAssignmentRequest, FleetMixRequest, MaintenanceScheduleRequest,
     FuelOptimizationRequest, EmployeeScheduleRequest, TaskAssignmentRequest,
     BreakScheduleRequest, LaborCostRequest, WorkforceCapacityRequest,
-    ShiftCoverageRequest
+    ShiftCoverageRequest,
+    LaborSchedulingRequest, EquipmentAllocationRequest, MaterialDeliveryPlanningRequest, RiskSimulationRequest
 )
 import uuid
 from datetime import datetime
@@ -163,6 +164,50 @@ async def solve_shift_coverage(request: ShiftCoverageRequest):
     try:
         result = await solver_service.solve({
             "type": "shift_coverage",
+            **request.dict()
+        })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/solve/labor-scheduling")
+def solve_labor_scheduling(request: LaborSchedulingRequest):
+    try:
+        result = solver_service.solve({
+            "type": "labor_scheduling",
+            **request.dict()
+        })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/solve/equipment-allocation")
+def solve_equipment_allocation(request: EquipmentAllocationRequest):
+    try:
+        result = solver_service.solve({
+            "type": "equipment_allocation",
+            **request.dict()
+        })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/solve/material-delivery-planning")
+def solve_material_delivery_planning(request: MaterialDeliveryPlanningRequest):
+    try:
+        result = solver_service.solve({
+            "type": "material_delivery_planning",
+            **request.dict()
+        })
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/solve/risk-simulation")
+def solve_risk_simulation(request: RiskSimulationRequest):
+    try:
+        result = solver_service.solve({
+            "type": "risk_simulation",
             **request.dict()
         })
         return result

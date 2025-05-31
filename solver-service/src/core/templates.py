@@ -149,4 +149,50 @@ class ShiftCoverageRequest(BaseModel):
         "max_consecutive_shifts": int,
         "min_rest_between_shifts": float,
         "skill_requirements": Dict[str, List[str]]
-    } 
+    }
+
+# --- New World-Class OR Models ---
+
+class LaborSchedulingRequest(BaseModel):
+    employees: List[Driver]
+    shifts: List[Dict[str, Any]]
+    time_horizon: int
+    constraints: Dict[str, Any] = {
+        "min_rest_hours": float,
+        "max_consecutive_hours": float,
+        "required_breaks": List[Dict[str, Any]],
+        "skill_requirements": Dict[str, List[str]],
+        "coverage_requirements": Dict[str, int]
+    }
+    objective: str = "minimize_cost"  # or "maximize_coverage"
+
+class EquipmentAllocationRequest(BaseModel):
+    equipment: List[Dict[str, Any]]  # id, type, capacity, cost
+    tasks: List[Task]
+    locations: List[Location]
+    cost_matrix: List[List[float]]
+    constraints: Dict[str, Any] = {
+        "max_equipment_per_location": int,
+        "min_tasks_per_equipment": int,
+        "assignment_restrictions": List[Dict[str, Any]]
+    }
+    objective: str = "minimize_total_cost"
+
+class MaterialDeliveryPlanningRequest(BaseModel):
+    vehicles: List[Vehicle]
+    deliveries: List[Task]  # Each task is a delivery
+    locations: List[Location]
+    time_windows: List[List[float]]
+    distance_matrix: List[List[float]]
+    constraints: Dict[str, Any] = {
+        "vehicle_capacity": float,
+        "max_route_time": float,
+        "delivery_time_windows": List[List[float]]
+    }
+    objective: str = "minimize_total_distance"
+
+class RiskSimulationRequest(BaseModel):
+    project_network: List[Dict[str, Any]]  # CPM network: tasks, dependencies, durations
+    risk_factors: List[Dict[str, Any]]  # e.g., distributions for durations
+    num_simulations: int = 1000
+    objective: str = "estimate_risk" 

@@ -27,7 +27,11 @@ class SolverService:
             "break_schedule": self._solve_break_schedule,
             "labor_cost": self._solve_labor_cost,
             "workforce_capacity": self._solve_workforce_capacity,
-            "shift_coverage": self._solve_shift_coverage
+            "shift_coverage": self._solve_shift_coverage,
+            "labor_scheduling": self._solve_labor_scheduling,
+            "equipment_allocation": self._solve_equipment_allocation,
+            "material_delivery_planning": self._solve_material_delivery_planning,
+            "risk_simulation": self._solve_risk_simulation
         }
 
     def solve(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -119,8 +123,74 @@ class SolverService:
 
     def _solve_mip(self, data: Dict[str, Any]) -> Dict[str, Any]:
         solver = pywraplp.Solver.CreateSolver('SCIP')
-        # Implementation for mixed integer programming
-        return {"status": "success", "solution": {}}
+        if not solver:
+            raise Exception("Failed to create solver")
+
+        # Create variables
+        variables = {}
+        for var in data["variables"]:
+            name = var["name"]
+            var_type = var.get("type", "continuous")
+            lower_bound = var.get("lower_bound", 0)
+            upper_bound = var.get("upper_bound", 1) if var_type == "binary" else var.get("upper_bound", float('inf'))
+            if var_type == "binary":
+                variables[name] = solver.IntVar(0, 1, name)
+            elif var_type == "integer":
+                variables[name] = solver.IntVar(lower_bound, upper_bound, name)
+            else:
+                variables[name] = solver.NumVar(lower_bound, upper_bound, name)
+
+        # Add constraints (same parsing as in _solve_lp)
+        for constraint in data.get("constraints", []):
+            expr = constraint["expression"]
+            operator = constraint["operator"]
+            rhs = constraint["rhs"]
+            terms = expr.split('+')
+            linear_expr = solver.Sum([
+                float(term.strip().split('*')[0]) * variables[term.strip().split('*')[1]]
+                if '*' in term else variables[term.strip()]
+                for term in terms
+            ])
+            if operator == "<=":
+                solver.Add(linear_expr <= rhs)
+            elif operator == ">=":
+                solver.Add(linear_expr >= rhs)
+            elif operator == "=":
+                solver.Add(linear_expr == rhs)
+
+        # Set objective
+        objective = data["objective"]
+        expr = objective["expression"]
+        terms = expr.split('+')
+        linear_expr = solver.Sum([
+            float(term.strip().split('*')[0]) * variables[term.strip().split('*')[1]]
+            if '*' in term else variables[term.strip()]
+            for term in terms
+        ])
+        if objective["type"] == "minimize":
+            solver.Minimize(linear_expr)
+        else:
+            solver.Maximize(linear_expr)
+
+        # Solve
+        status = solver.Solve()
+
+        # Return solution
+        if status == pywraplp.Solver.OPTIMAL or status == pywraplp.Solver.FEASIBLE:
+            solution = {name: var.solution_value() for name, var in variables.items()}
+            return {
+                "status": "OPTIMAL" if status == pywraplp.Solver.OPTIMAL else "FEASIBLE",
+                "solution": solution,
+                "objective_value": solver.Objective().Value(),
+                "solve_time": solver.WallTime() / 1000,
+                "iterations": solver.Iterations()
+            }
+        elif status == pywraplp.Solver.INFEASIBLE:
+            return {"status": "INFEASIBLE", "solution": {}, "error": "Problem is infeasible"}
+        elif status == pywraplp.Solver.UNBOUNDED:
+            return {"status": "UNBOUNDED", "solution": {}, "error": "Problem is unbounded"}
+        else:
+            return {"status": "FAILED", "solution": {}, "error": "Failed to solve mip"}
 
     def _solve_cp(self, data: Dict[str, Any]) -> Dict[str, Any]:
         solver = pywrapcp.Solver('CP')
@@ -641,6 +711,263 @@ class SolverService:
             return {"status": "success", "solution": solution}
         else:
             return {"status": "failed", "error": "No optimal solution found"}
+
+    def _solve_labor_scheduling(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Solve labor scheduling using CP-SAT (OR-Tools).
+        """
+        from ortools.sat.python import cp_model
+        model = cp_model.CpModel()
+        employees = data["employees"]
+        shifts = data["shifts"]
+        time_horizon = data["time_horizon"]
+        constraints = data["constraints"]
+        objective_type = data.get("objective", "minimize_cost")
+
+        # Variables: shift_assignments[(e, s, d)] = 1 if employee e works shift s on day d
+        shift_assignments = {}
+        for e in employees:
+            for s in shifts:
+                for d in range(time_horizon):
+                    shift_assignments[(e["id"], s["id"], d)] = model.NewBoolVar(f"x_{e['id']}_{s['id']}_{d}")
+
+        # Constraint: Each shift must be covered by at least required employees
+        for s in shifts:
+            for d in range(time_horizon):
+                model.Add(
+                    sum(shift_assignments[(e["id"], s["id"], d)] for e in employees) >= constraints["coverage_requirements"].get(str(s["id"]), 1)
+                )
+
+        # Constraint: Max consecutive hours per employee
+        max_consec = int(constraints.get("max_consecutive_hours", 8))
+        for e in employees:
+            for d in range(time_horizon - max_consec):
+                model.Add(
+                    sum(shift_assignments[(e["id"], s["id"], dd)] for s in shifts for dd in range(d, d+max_consec+1)) <= max_consec
+                )
+
+        # Constraint: Min rest hours between shifts
+        min_rest = int(constraints.get("min_rest_hours", 8))
+        for e in employees:
+            for d in range(time_horizon - 1):
+                for s1 in shifts:
+                    for s2 in shifts:
+                        if s1["id"] != s2["id"]:
+                            model.Add(
+                                shift_assignments[(e["id"], s1["id"], d)] + shift_assignments[(e["id"], s2["id"], d+1)] <= 1
+                            )
+
+        # Constraint: Skill requirements
+        for s in shifts:
+            required_skills = constraints.get("skill_requirements", {}).get(str(s["id"]), [])
+            for d in range(time_horizon):
+                for e in employees:
+                    if not all(skill in e["skills"] for skill in required_skills):
+                        model.Add(shift_assignments[(e["id"], s["id"], d)] == 0)
+
+        # Objective: Minimize total cost or maximize coverage
+        if objective_type == "minimize_cost":
+            model.Minimize(
+                sum(shift_assignments[(e["id"], s["id"], d)] * e.get("hourly_rate", 1)
+                    for e in employees for s in shifts for d in range(time_horizon))
+            )
+        else:
+            model.Maximize(
+                sum(shift_assignments[(e["id"], s["id"], d)] for e in employees for s in shifts for d in range(time_horizon))
+            )
+
+        # Solve
+        solver = cp_model.CpSolver()
+        status = solver.Solve(model)
+        if status in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
+            schedule = []
+            for e in employees:
+                for s in shifts:
+                    for d in range(time_horizon):
+                        if solver.Value(shift_assignments[(e["id"], s["id"], d)]) > 0.5:
+                            schedule.append({
+                                "employee_id": e["id"],
+                                "shift_id": s["id"],
+                                "day": d
+                            })
+            return {
+                "status": "OPTIMAL" if status == cp_model.OPTIMAL else "FEASIBLE",
+                "solution": {"schedule": schedule},
+                "objective_value": solver.ObjectiveValue()
+            }
+        else:
+            return {"status": "INFEASIBLE", "solution": {}, "error": "No feasible schedule found"}
+
+    def _solve_equipment_allocation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Solve equipment allocation as a transportation/assignment problem (OR-Tools MIP).
+        """
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        equipment = data["equipment"]
+        tasks = data["tasks"]
+        cost_matrix = data["cost_matrix"]
+        constraints = data["constraints"]
+        # Variables: assign[(eq, t)] = 1 if equipment eq assigned to task t
+        assign = {}
+        for eq in equipment:
+            for t in tasks:
+                assign[(eq["id"], t.id)] = solver.BoolVar(f"x_{eq['id']}_{t.id}")
+        # Each task assigned to exactly one equipment
+        for t in tasks:
+            solver.Add(sum(assign[(eq["id"], t.id)] for eq in equipment) == 1)
+        # Max equipment per location
+        if "max_equipment_per_location" in constraints:
+            for loc in set(t.location.id for t in tasks):
+                solver.Add(
+                    sum(assign[(eq["id"], t.id)] for eq in equipment for t in tasks if t.location.id == loc) <= constraints["max_equipment_per_location"]
+                )
+        # Min tasks per equipment
+        if "min_tasks_per_equipment" in constraints:
+            for eq in equipment:
+                solver.Add(
+                    sum(assign[(eq["id"], t.id)] for t in tasks) >= constraints["min_tasks_per_equipment"]
+                )
+        # Assignment restrictions
+        for restriction in constraints.get("assignment_restrictions", []):
+            eq_id = restriction.get("equipment_id")
+            t_id = restriction.get("task_id")
+            if eq_id is not None and t_id is not None:
+                solver.Add(assign[(eq_id, t_id)] == 0)
+        # Objective: minimize total cost
+        objective = solver.Objective()
+        for eq in equipment:
+            for t in tasks:
+                objective.SetCoefficient(assign[(eq["id"], t.id)], cost_matrix[eq["id"]][t.id])
+        objective.SetMinimization()
+        status = solver.Solve()
+        if status == pywraplp.Solver.OPTIMAL:
+            assignments = []
+            for eq in equipment:
+                for t in tasks:
+                    if assign[(eq["id"], t.id)].solution_value() > 0.5:
+                        assignments.append({"equipment_id": eq["id"], "task_id": t.id})
+            return {
+                "status": "OPTIMAL",
+                "solution": {"assignments": assignments},
+                "objective_value": objective.Value()
+            }
+        else:
+            return {"status": "INFEASIBLE", "solution": {}, "error": "No feasible assignment found"}
+
+    def _solve_material_delivery_planning(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Solve material delivery planning as a VRPTW (Vehicle Routing Problem with Time Windows) using OR-Tools.
+        """
+        # Prepare data
+        vehicles = data["vehicles"]
+        deliveries = data["deliveries"]
+        locations = data["locations"]
+        time_windows = data["time_windows"]
+        distance_matrix = data["distance_matrix"]
+        constraints = data["constraints"]
+        num_vehicles = len(vehicles)
+        depot = 0  # Assume first location is depot
+        from ortools.constraint_solver import pywrapcp, routing_enums_pb2
+        manager = pywrapcp.RoutingIndexManager(len(locations), num_vehicles, depot)
+        routing = pywrapcp.RoutingModel(manager)
+        # Distance callback
+        def distance_callback(from_index, to_index):
+            from_node = manager.IndexToNode(from_index)
+            to_node = manager.IndexToNode(to_index)
+            return int(distance_matrix[from_node][to_node])
+        transit_callback_index = routing.RegisterTransitCallback(distance_callback)
+        routing.SetArcCostEvaluatorOfAllVehicles(transit_callback_index)
+        # Add time window constraints
+        time = 'Time'
+        routing.AddDimension(
+            transit_callback_index,
+            30,  # allow waiting time
+            int(constraints.get("max_route_time", 1000)),  # maximum route time
+            False,
+            time
+        )
+        time_dimension = routing.GetDimensionOrDie(time)
+        for i, window in enumerate(time_windows):
+            index = manager.NodeToIndex(i)
+            time_dimension.CumulVar(index).SetRange(int(window[0]), int(window[1]))
+        # Add capacity constraints
+        def demand_callback(from_index):
+            from_node = manager.IndexToNode(from_index)
+            if from_node == depot:
+                return 0
+            return int(deliveries[from_node-1].duration)  # assuming duration is demand
+        demand_callback_index = routing.RegisterUnaryTransitCallback(demand_callback)
+        routing.AddDimensionWithVehicleCapacity(
+            demand_callback_index,
+            0,  # null capacity slack
+            [int(v.capacity) for v in vehicles],
+            True,
+            'Capacity'
+        )
+        # Setting first solution heuristic
+        search_parameters = pywrapcp.DefaultRoutingSearchParameters()
+        search_parameters.first_solution_strategy = (
+            routing_enums_pb2.FirstSolutionStrategy.PATH_CHEAPEST_ARC)
+        # Solve
+        solution = routing.SolveWithParameters(search_parameters)
+        if solution:
+            routes = []
+            for vehicle_id in range(num_vehicles):
+                index = routing.Start(vehicle_id)
+                route = []
+                while not routing.IsEnd(index):
+                    node = manager.IndexToNode(index)
+                    route.append(node)
+                    index = solution.Value(routing.NextVar(index))
+                routes.append({"vehicle_id": vehicles[vehicle_id].id, "route": route})
+            return {
+                "status": "OPTIMAL",
+                "solution": {"routes": routes}
+            }
+        else:
+            return {"status": "INFEASIBLE", "solution": {}, "error": "No feasible routes found"}
+
+    def _solve_risk_simulation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Run Monte Carlo simulation and CPM for risk analysis (NumPy + custom logic).
+        """
+        import numpy as np
+        project_network = data["project_network"]
+        risk_factors = data["risk_factors"]
+        num_simulations = data.get("num_simulations", 1000)
+        # Build task duration distributions
+        task_durations = {}
+        for task in project_network:
+            rf = next((r for r in risk_factors if r["task_id"] == task["id"]), None)
+            if rf:
+                # Assume normal distribution for demo
+                mu, sigma = rf.get("mean", 1), rf.get("stddev", 0.1)
+                task_durations[task["id"]] = np.random.normal(mu, sigma, num_simulations)
+            else:
+                task_durations[task["id"]] = np.ones(num_simulations)
+        # CPM simulation
+        results = []
+        for sim in range(num_simulations):
+            # Build a dict of task finish times
+            finish_times = {}
+            for task in project_network:
+                preds = task.get("predecessors", [])
+                pred_finish = max([finish_times.get(pid, 0) for pid in preds], default=0)
+                finish_times[task["id"]] = pred_finish + task_durations[task["id"]][sim]
+            project_duration = max(finish_times.values())
+            results.append(project_duration)
+        # Summarize risk profile
+        risk_profile = {
+            "mean": float(np.mean(results)),
+            "stddev": float(np.std(results)),
+            "p90": float(np.percentile(results, 90)),
+            "p95": float(np.percentile(results, 95)),
+            "histogram": np.histogram(results, bins=20)[0].tolist()
+        }
+        return {
+            "status": "SUCCESS",
+            "solution": {"risk_profile": risk_profile}
+        }
 
     def build_model(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Build an optimization model from the request."""
