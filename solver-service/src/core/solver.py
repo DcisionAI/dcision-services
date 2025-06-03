@@ -2,6 +2,7 @@ from typing import Dict, Any, List
 from ortools.linear_solver import pywraplp
 from ortools.constraint_solver import routing_enums_pb2
 from ortools.constraint_solver import pywrapcp
+from ortools.sat.python import cp_model
 import numpy as np
 from .templates import (
     VehicleAssignmentRequest, FleetMixRequest, MaintenanceScheduleRequest,
@@ -31,7 +32,15 @@ class SolverService:
             "labor_scheduling": self._solve_labor_scheduling,
             "equipment_allocation": self._solve_equipment_allocation,
             "material_delivery_planning": self._solve_material_delivery_planning,
-            "risk_simulation": self._solve_risk_simulation
+            "risk_simulation": self._solve_risk_simulation,
+            # Construction optimization use cases
+            "crew_allocation": self._solve_crew_allocation,
+            "equipment_resource_planning": self._solve_equipment_resource_planning,
+            "subcontractor_scheduling": self._solve_subcontractor_scheduling,
+            "material_delivery_optimization": self._solve_material_delivery_optimization,
+            "portfolio_balancing": self._solve_portfolio_balancing,
+            "change_order_impact": self._solve_change_order_impact,
+            "compliance_planning": self._solve_compliance_planning
         }
 
     def solve(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -811,21 +820,21 @@ class SolverService:
         assign = {}
         for eq in equipment:
             for t in tasks:
-                assign[(eq["id"], t.id)] = solver.BoolVar(f"x_{eq['id']}_{t.id}")
+                assign[(eq['id'], t['id'])] = solver.BoolVar(f"x_{eq['id']}_{t['id']}")
         # Each task assigned to exactly one equipment
         for t in tasks:
-            solver.Add(sum(assign[(eq["id"], t.id)] for eq in equipment) == 1)
+            solver.Add(sum(assign[(eq['id'], t['id'])] for eq in equipment) == 1)
         # Max equipment per location
         if "max_equipment_per_location" in constraints:
-            for loc in set(t.location.id for t in tasks):
+            for loc in set(t['location']['id'] for t in tasks):
                 solver.Add(
-                    sum(assign[(eq["id"], t.id)] for eq in equipment for t in tasks if t.location.id == loc) <= constraints["max_equipment_per_location"]
+                    sum(assign[(eq['id'], t['id'])] for eq in equipment for t in tasks if t['location']['id'] == loc) <= constraints["max_equipment_per_location"]
                 )
         # Min tasks per equipment
         if "min_tasks_per_equipment" in constraints:
             for eq in equipment:
                 solver.Add(
-                    sum(assign[(eq["id"], t.id)] for t in tasks) >= constraints["min_tasks_per_equipment"]
+                    sum(assign[(eq['id'], t['id'])] for t in tasks) >= constraints["min_tasks_per_equipment"]
                 )
         # Assignment restrictions
         for restriction in constraints.get("assignment_restrictions", []):
@@ -837,15 +846,15 @@ class SolverService:
         objective = solver.Objective()
         for eq in equipment:
             for t in tasks:
-                objective.SetCoefficient(assign[(eq["id"], t.id)], cost_matrix[eq["id"]][t.id])
+                objective.SetCoefficient(assign[(eq['id'], t['id'])], cost_matrix[eq['id']][t['id']])
         objective.SetMinimization()
         status = solver.Solve()
         if status == pywraplp.Solver.OPTIMAL:
             assignments = []
             for eq in equipment:
                 for t in tasks:
-                    if assign[(eq["id"], t.id)].solution_value() > 0.5:
-                        assignments.append({"equipment_id": eq["id"], "task_id": t.id})
+                    if assign[(eq['id'], t['id'])].solution_value() > 0.5:
+                        assignments.append({"equipment_id": eq['id'], "task_id": t['id']})
             return {
                 "status": "OPTIMAL",
                 "solution": {"assignments": assignments},
@@ -968,6 +977,237 @@ class SolverService:
             "status": "SUCCESS",
             "solution": {"risk_profile": risk_profile}
         }
+    # --- Construction Optimization Implementations ---
+    def _solve_crew_allocation(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        crews = data.get('crews', [])
+        tasks = data.get('tasks', [])
+        priorities = data.get('priorities', {})
+        # Max hours per crew from availability and union rules
+        max_hours = {}
+        for crew in crews:
+            cid = crew.get('id')
+            avail = crew.get('availability', [])
+            total_avail = sum((w[1] - w[0]) for w in avail)
+            max_daily = None
+            for rule in data.get('union_rules', []):
+                if 'max_work_hours_per_day' in rule:
+                    max_daily = rule['max_work_hours_per_day']
+            cap = min(total_avail, max_daily) if max_daily is not None else total_avail
+            max_hours[cid] = int(cap)
+        model = cp_model.CpModel()
+        x = {}
+        for crew in crews:
+            c = crew.get('id')
+            skills = set(crew.get('skills', []))
+            for task in tasks:
+                t = task.get('id')
+                req = set(task.get('required_skills', []))
+                dur = int(task.get('duration', 0))
+                if req.issubset(skills):
+                    var = model.NewBoolVar(f'x_c{c}_t{t}')
+                    x[(c, t)] = (var, dur)
+        for task in tasks:
+            t = task.get('id')
+            model.Add(sum(var for (c2, t2), (var, _) in x.items() if t2 == t) == 1)
+        for crew in crews:
+            c = crew.get('id')
+            model.Add(sum(var * dur for (c2, t2), (var, dur) in x.items() if c2 == c) <= max_hours.get(c, 0))
+        objective = []
+        for (c, t), (var, _) in x.items():
+            site = next((tsk.get('site_id') for tsk in tasks if tsk.get('id') == t), None)
+            weight = priorities.get(site, 1)
+            objective.append(var * int(weight))
+        model.Maximize(sum(objective))
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 10
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            assignments = [{'crew_id': c, 'task_id': t}
+                           for (c, t), (var, _) in x.items() if solver.Value(var)]
+            return {'status': 'success', 'solution': {'assignments': assignments}}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible crew allocation'}
+
+    def _solve_equipment_resource_planning(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        equipment = data.get('equipment', [])
+        tasks = data.get('tasks', [])
+        model = cp_model.CpModel()
+        x = {}
+        for eq in equipment:
+            eid = eq.get('id')
+            for task in tasks:
+                tid = task.get('id')
+                x[(eid, tid)] = model.NewBoolVar(f'x_e{eid}_t{tid}')
+        for task in tasks:
+            tid = task.get('id')
+            model.Add(sum(x[(eid, tid)] for eid, _ in x if _ == tid) == 1)
+        for eq in equipment:
+            eid = eq.get('id')
+            for t1 in tasks:
+                for t2 in tasks:
+                    if t1.get('id') >= t2.get('id'):
+                        continue
+                    w1 = t1.get('time_window')
+                    w2 = t2.get('time_window')
+                    if w1 and w2 and not (w1[1] <= w2[0] or w2[1] <= w1[0]):
+                        model.Add(x[(eid, t1.get('id'))] + x[(eid, t2.get('id'))] <= 1)
+        used = {e.get('id'): model.NewBoolVar(f'u_{e.get("id")}') for e in equipment}
+        for eid in used:
+            for task in tasks:
+                tid = task.get('id')
+                model.Add(used[eid] >= x[(eid, tid)])
+        model.Minimize(sum(used.values()))
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 10
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            sol = {
+                'assignments': [{'equipment_id': eid, 'task_id': tid}
+                                for (eid, tid), var in x.items() if solver.Value(var)],
+                'equipment_used': [eid for eid, var in used.items() if solver.Value(var)]
+            }
+            return {'status': 'success', 'solution': sol}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible equipment plan'}
+
+    def _solve_subcontractor_scheduling(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        tasks = data.get('tasks', [])
+        horizon = data.get('time_horizon', 24)
+        model = cp_model.CpModel()
+        starts, ends = {}, {}
+        for task in tasks:
+            tid = task.get('id')
+            dur = int(task.get('duration', 0))
+            est = int(task.get('earliest_start', 0))
+            let = int(task.get('latest_end', horizon))
+            start = model.NewIntVar(est, let - dur, f'start_{tid}')
+            end = model.NewIntVar(est + dur, let, f'end_{tid}')
+            model.Add(end == start + dur)
+            starts[tid], ends[tid] = start, end
+        for task in tasks:
+            tid = task.get('id')
+            for pred in task.get('predecessors', []):
+                model.Add(starts[tid] >= ends.get(pred, 0))
+        makespan = model.NewIntVar(0, horizon, 'makespan')
+        model.AddMaxEquality(makespan, list(ends.values()))
+        model.Minimize(makespan)
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 10
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            schedule = [{'task_id': tid,
+                         'start': solver.Value(starts[tid]),
+                         'end': solver.Value(ends[tid])}
+                        for tid in starts]
+            return {'status': 'success', 'solution': {'makespan': solver.Value(makespan), 'schedule': schedule}}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible schedule'}
+
+    def _solve_material_delivery_optimization(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        vehicles = data.get('vehicles', [])
+        deliveries = data.get('deliveries', [])
+        model = cp_model.CpModel()
+        x = {}
+        for v in vehicles:
+            vid = v.get('id'); cap = int(v.get('capacity', 1))
+            for d in deliveries:
+                did = d.get('id'); qty = int(d.get('quantity', 1))
+                if qty <= cap:
+                    x[(vid, did)] = model.NewBoolVar(f'x_v{vid}_d{did}')
+        for d in deliveries:
+            did = d.get('id')
+            model.Add(sum(x[(vid, did)] for vid, _ in x if _ == did) == 1)
+        for v in vehicles:
+            vid = v.get('id'); cap = int(v.get('capacity', 1))
+            model.Add(sum(x[(vid, d.get('id'))] * int(d.get('quantity', 1))
+                          for d in deliveries if (vid, d.get('id')) in x) <= cap)
+        used = {v.get('id'): model.NewBoolVar(f'u_{v.get("id")}') for v in vehicles}
+        for vid in used:
+            for d in deliveries:
+                did = d.get('id')
+                if (vid, did) in x:
+                    model.Add(used[vid] >= x[(vid, did)])
+        model.Minimize(sum(used.values()))
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 10
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            assignments = [{'vehicle_id': vid, 'delivery_id': did}
+                           for (vid, did), var in x.items() if solver.Value(var)]
+            vehicles_used = [vid for vid, var in used.items() if solver.Value(var)]
+            return {'status': 'success', 'solution': {'assignments': assignments, 'vehicles_used': vehicles_used}}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible delivery plan'}
+
+    def _solve_portfolio_balancing(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        sites = data.get('sites', [])
+        resources = data.get('resources', [])
+        weights = data.get('weights', {})
+        constr = data.get('constraints', {})
+        total_res = sum(int(r.get('count', 0)) for r in resources)
+        solver = pywraplp.Solver.CreateSolver('SCIP')
+        alloc = {}
+        for site in sites:
+            sid = site.get('id')
+            lo = int(constr.get('min_allocations', {}).get(sid, 0))
+            hi = int(constr.get('max_allocations', {}).get(sid, total_res))
+            alloc[sid] = solver.IntVar(lo, hi, f'x_{sid}')
+        solver.Add(sum(alloc.values()) <= total_res)
+        objective = solver.Objective()
+        for sid, var in alloc.items():
+            w = float(weights.get(sid, 1.0))
+            objective.SetCoefficient(var, w)
+        objective.SetMaximization()
+        status = solver.Solve()
+        if status in (pywraplp.Solver.OPTIMAL, pywraplp.Solver.FEASIBLE):
+            sol = {sid: int(var.solution_value()) for sid, var in alloc.items()}
+            return {'status': 'success', 'solution': {'allocations': sol}}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible portfolio allocation'}
+
+    def _solve_change_order_impact(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        plan = data.get('original_plan', {})
+        changes = data.get('change_orders', [])
+        tasks = plan.get('tasks', [])
+        duration_map = {t.get('id'): int(t.get('duration', 0)) for t in tasks}
+        for ch in changes:
+            tid = ch.get('task_id')
+            delta = int(ch.get('duration_delta', 0))
+            if tid in duration_map:
+                duration_map[tid] += delta
+        finish = {}
+        for t in tasks:
+            tid = t.get('id')
+            preds = t.get('predecessors', [])
+            pf = max(finish.get(p, 0) for p in preds) if preds else 0
+            finish[tid] = pf + duration_map.get(tid, 0)
+        makespan = max(finish.values()) if finish else 0
+        return {'status': 'success', 'solution': {'new_makespan': makespan}} 
+
+    def _solve_compliance_planning(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        tasks = data.get('tasks', [])
+        blacks = data.get('blackout_windows', [])
+        horizon = data.get('constraints', {}).get('time_horizon', max((bw[1] for bw in blacks), default=24))
+        model = cp_model.CpModel()
+        starts, ends = {}, {}
+        for t in tasks:
+            tid = t.get('id')
+            dur = int(t.get('duration', 0))
+            start = model.NewIntVar(0, horizon, f'start_{tid}')
+            end = model.NewIntVar(0, horizon, f'end_{tid}')
+            model.Add(end == start + dur)
+            starts[tid], ends[tid] = start, end
+            for bw in blacks:
+                bw_s, bw_e = int(bw[0]), int(bw[1])
+                b = model.NewBoolVar(f'bw_{tid}_{bw_s}_{bw_e}')
+                model.Add(end <= bw_s).OnlyEnforceIf(b)
+                model.Add(start >= bw_e).OnlyEnforceIf(b.Not())
+        makespan = model.NewIntVar(0, horizon, 'makespan')
+        model.AddMaxEquality(makespan, list(ends.values()))
+        model.Minimize(makespan)
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = 10
+        status = solver.Solve(model)
+        if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+            schedule = [{'task_id': tid, 'start': solver.Value(starts[tid]), 'end': solver.Value(ends[tid])}
+                        for tid in starts]
+            return {'status': 'success', 'solution': {'makespan': solver.Value(makespan), 'schedule': schedule}}
+        return {'status': 'infeasible', 'solution': {}, 'error': 'No feasible compliance schedule'}
 
     def build_model(self, request: Dict[str, Any]) -> Dict[str, Any]:
         """Build an optimization model from the request."""

@@ -1,0 +1,15 @@
+{
+  "sessionId": "test-portfolio-balancing-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "sites": [ { "id": 501 }, { "id": 502 } ],
+    "resources": [ { "id": 1, "count": 10 } ],
+    "weights": { "501": 2.0, "502": 1.0 },
+    "constraints": { "min_allocations": { "501": 2, "502": 1 }, "max_allocations": { "501": 8, "502": 5 } }
+  },
+  "context": { "problemType": "portfolio_balancing" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}

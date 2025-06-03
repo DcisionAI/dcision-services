@@ -1,0 +1,22 @@
+{
+  "sessionId": "test-crew-allocation-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "crews": [
+      { "id": 1, "skills": ["assembly"], "availability": [[0, 8]] },
+      { "id": 2, "skills": ["welding"], "availability": [[0, 8]] }
+    ],
+    "tasks": [
+      { "id": 101, "site_id": 1, "required_skills": ["assembly"], "duration": 4 },
+      { "id": 102, "site_id": 1, "required_skills": ["welding"], "duration": 3 }
+    ],
+    "shifts": [ { "id": 1, "start": 0, "end": 8 } ],
+    "union_rules": [ { "max_work_hours_per_day": 8 } ],
+    "priorities": { "1": 10 }
+  },
+  "context": { "problemType": "crew_allocation" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}

@@ -1,0 +1,19 @@
+{
+  "sessionId": "test-equipment-planning-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "equipment": [
+      { "id": 1, "capacity": 1 },
+      { "id": 2, "capacity": 1 }
+    ],
+    "tasks": [
+      { "id": 201, "time_window": [0, 4] },
+      { "id": 202, "time_window": [3, 8] }
+    ]
+  },
+  "context": { "problemType": "equipment_resource_planning" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}

@@ -1,0 +1,16 @@
+{
+  "sessionId": "test-material-delivery-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "vehicles": [ { "id": 1, "capacity": 10 } ],
+    "deliveries": [
+      { "id": 401, "quantity": 5 },
+      { "id": 402, "quantity": 4 }
+    ]
+  },
+  "context": { "problemType": "material_delivery_optimization" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}

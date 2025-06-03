@@ -1,0 +1,17 @@
+{
+  "sessionId": "test-subcontractor-scheduling-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "tasks": [
+      { "id": 301, "duration": 2, "predecessors": [] },
+      { "id": 302, "duration": 3, "predecessors": [301] }
+    ],
+    "contracts": [],
+    "time_horizon": 8
+  },
+  "context": { "problemType": "subcontractor_scheduling" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}

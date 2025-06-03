@@ -195,4 +195,50 @@ class RiskSimulationRequest(BaseModel):
     project_network: List[Dict[str, Any]]  # CPM network: tasks, dependencies, durations
     risk_factors: List[Dict[str, Any]]  # e.g., distributions for durations
     num_simulations: int = 1000
-    objective: str = "estimate_risk" 
+    objective: str = "estimate_risk"
+
+# --- Construction Optimization Use Cases ---
+class CrewAllocationRequest(BaseModel):
+    crews: List[Dict[str, Any]]       # list of workers with skills, availability
+    sites: List[Dict[str, Any]]       # work sites with requirements
+    tasks: List[Dict[str, Any]]       # tasks to assign per site
+    shifts: List[Dict[str, Any]]      # shift definitions (start, end, break rules)
+    union_rules: List[Dict[str, Any]] # contractual and legal constraints
+    priorities: Dict[int, int]        # site_id -> priority weight
+
+class EquipmentResourcePlanningRequest(BaseModel):
+    equipment: List[Dict[str, Any]]   # high-value assets with capacities
+    projects: List[Dict[str, Any]]    # project sites and timelines
+    tasks: List[Dict[str, Any]]       # equipment usage tasks per site
+    time_horizon: int                 # planning horizon in days
+    move_times: List[List[float]]     # transport/setup times matrix
+    constraints: Dict[str, Any]       # budget, max moves, etc.
+
+class SubcontractorScheduleRequest(BaseModel):
+    subcontractors: List[Dict[str, Any]]  # subcontractor entities
+    tasks: List[Dict[str, Any]]           # project tasks with dependencies
+    contracts: List[Dict[str, Any]]       # time windows and scopes
+    time_horizon: int                     # overall schedule horizon
+
+class MaterialDeliveryOptimizationRequest(BaseModel):
+    deliveries: List[Dict[str, Any]]      # material drop-offs with qty, time windows
+    vehicles: List[Dict[str, Any]]        # delivery vehicles
+    storage: List[Dict[str, Any]]         # storage facilities with capacity
+    distance_matrix: List[List[float]]    # travel distances between locations
+    constraints: Dict[str, Any]           # inventory and site constraints
+
+class PortfolioBalancingRequest(BaseModel):
+    sites: List[Dict[str, Any]]           # active projects with deadlines/budgets
+    resources: List[Dict[str, Any]]       # labor/equipment pools
+    weights: Dict[int, float]             # site_id -> priority or risk weight
+    constraints: Dict[str, Any]           # min/max allocations, budgets
+
+class ChangeOrderImpactRequest(BaseModel):
+    original_plan: Dict[str, Any]         # prior schedule or resource plan
+    change_orders: List[Dict[str, Any]]   # new scope changes
+    num_simulations: int = 100            # Monte Carlo runs for impact
+
+class CompliancePlanningRequest(BaseModel):
+    tasks: List[Dict[str, Any]]           # scheduled work tasks
+    blackout_windows: List[List[float]]   # forbidden time intervals [start,end]
+    constraints: Dict[str, Any]           # permit rules, noise curfews, etc.

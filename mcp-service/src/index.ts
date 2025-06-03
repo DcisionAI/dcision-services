@@ -36,10 +36,28 @@ app.use(cors({
 
 // Environment variable for solver-service URL
 const SOLVER_URL = process.env.SOLVER_SERVICE_URL || 'http://localhost:8080';
+// Dynamic flows mapping (populated at startup)
+let flowMap: Record<string,string> = {};
+// Load available solver flows
+(async function loadFlows() {
+  try {
+    const resp = await axios.get(`${SOLVER_URL}/flows`);
+    resp.data.flows.forEach((f: any) => {
+      flowMap[f.id] = f.endpoint;
+    });
+    console.log('Loaded solver flows:', Object.keys(flowMap));
+  } catch (err) {
+    const e: any = err;
+    console.error('Could not load solver flows:', e.message || e);
+  }
+})();
 
 app.post('/mcp/submit', async (req, res) => {
   const mcp: MCP = req.body;
   const results: OrchestrationResult[] = [];
+
+  // Log the incoming payload for debugging
+  console.log('MCP received:', JSON.stringify(mcp, null, 2));
 
   for (const step of mcp.protocol.steps) {
     try {
@@ -50,14 +68,10 @@ app.post('/mcp/submit', async (req, res) => {
         // Model building placeholder
         results.push({ step, agent: 'ModelBuilderAgent', result: { message: 'Model built (mock)' } });
       } else if (step.action === 'solve_model') {
-        // Call solver-service
-        let solverRes;
-        if (mcp.context.problemType === 'vehicle_routing') {
-          solverRes = await axios.post(`${SOLVER_URL}/solve/vehicle-assignment`, mcp.model);
-        } else {
-          // For non-VRP problems, send the model payload directly to /solve
-          solverRes = await axios.post(`${SOLVER_URL}/solve`, mcp.model);
-        }
+        // Call solver-service using dynamic flows
+        const problemType = mcp.context?.problemType || mcp.model?.problemType || '';
+        const endpoint = flowMap[problemType] || '/solve';
+        const solverRes = await axios.post(`${SOLVER_URL}${endpoint}`, mcp.model);
         results.push({ step, agent: 'ModelRunnerAgent', result: solverRes.data });
       } else if (step.action === 'explain_solution') {
         // TODO: integrate LLM-based explanation
@@ -65,15 +79,16 @@ app.post('/mcp/submit', async (req, res) => {
       } else {
         results.push({ step, agent: 'Unknown', result: null, error: 'No agent for this action' });
       }
-    } catch (err: any) {
+    } catch (err) {
       // Capture detailed error from solver-service if available
-      let errorMsg = err.message;
-      if (err.response && err.response.data) {
+      const e: any = err;
+      let errorMsg = e.message;
+      if (e.response && e.response.data) {
         // Use 'detail' field from HTTPException, or full response body
-        if (err.response.data.detail) {
-          errorMsg = err.response.data.detail;
+        if (e.response.data.detail) {
+          errorMsg = e.response.data.detail;
         } else {
-          errorMsg = JSON.stringify(err.response.data);
+          errorMsg = JSON.stringify(e.response.data);
         }
       }
       results.push({ step, agent: 'ModelRunnerAgent', result: null, error: errorMsg });

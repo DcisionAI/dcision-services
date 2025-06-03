@@ -1,0 +1,18 @@
+{
+  "sessionId": "test-change-order-impact-001",
+  "version": "1.0",
+  "created": "2025-06-01T08:00:00Z",
+  "lastModified": "2025-06-01T08:00:00Z",
+  "status": "pending",
+  "model": {
+    "original_plan": {
+      "tasks": [
+        { "id": 601, "duration": 3, "predecessors": [] },
+        { "id": 602, "duration": 4, "predecessors": [601] }
+      ]
+    },
+    "change_orders": [ { "task_id": 602, "duration_delta": 2 } ]
+  },
+  "context": { "problemType": "change_order_impact" },
+  "protocol": { "steps": [ { "action": "solve_model", "required": true } ] }
+}
