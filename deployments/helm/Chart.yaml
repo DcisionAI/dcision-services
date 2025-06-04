@@ -1,0 +1,4 @@
+apiVersion: v2
+name: dcisionai-services
+description: DcisionAI Solver and MCP Services
+version: 0.1.0 

@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-service
+  template:
+    metadata:
+      labels:
+        app: mcp-service
+    spec:
+      containers:
+        - name: mcp-service
+          image: <your-mcp-image>
+          ports:
+            - containerPort: 3000
+          env:
+            - name: PORT
+              value: "3000"
+            - name: SOLVER_SERVICE_URL
+              value: "http://solver-service:8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mcp-service
+spec:
+  type: ClusterIP
+  selector:
+    app: mcp-service
+  ports:
+    - port: 3000
+      targetPort: 3000 

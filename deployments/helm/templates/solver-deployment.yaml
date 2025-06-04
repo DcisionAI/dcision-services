@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solver-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: solver-service
+  template:
+    metadata:
+      labels:
+        app: solver-service
+    spec:
+      containers:
+        - name: solver-service
+          image: {{ .Values.solver.image }}
+          ports:
+            - containerPort: {{ .Values.solver.port }}
+          env:
+            - name: PORT
+              value: "{{ .Values.solver.port }}" 

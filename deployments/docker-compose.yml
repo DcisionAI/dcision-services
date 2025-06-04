@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  solver-service:
+    build: ../solver-service
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+  mcp-service:
+    build: ../mcp-service
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - SOLVER_SERVICE_URL=http://solver-service:8080 

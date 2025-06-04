@@ -1,0 +1,8 @@
+solver:
+  image: <your-solver-image>
+  port: 8080
+
+mcp:
+  image: <your-mcp-image>
+  port: 3000
+  solverServiceUrl: "http://solver-service:8080" 

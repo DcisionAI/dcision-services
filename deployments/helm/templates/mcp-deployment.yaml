@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp-service
+  template:
+    metadata:
+      labels:
+        app: mcp-service
+    spec:
+      containers:
+        - name: mcp-service
+          image: {{ .Values.mcp.image }}
+          ports:
+            - containerPort: {{ .Values.mcp.port }}
+          env:
+            - name: PORT
+              value: "{{ .Values.mcp.port }}"
+            - name: SOLVER_SERVICE_URL
+              value: "{{ .Values.mcp.solverServiceUrl }}" 
