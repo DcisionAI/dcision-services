@@ -398,7 +398,11 @@ async def explain(request: ExplainRequest):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"} 
+    return {"status": "healthy"}
+
+@app.get("/healthz")
+async def healthz():
+    return {"status": "healthy"}
 @app.get("/flows", response_model=FlowsResponse)
 def list_flows():
     """List all available solver flows and their endpoints."""

@@ -36,21 +36,19 @@ app.use(cors({
 
 // Environment variable for solver-service URL
 const SOLVER_URL = process.env.SOLVER_SERVICE_URL || 'http://localhost:8080';
-// Dynamic flows mapping (populated at startup)
-let flowMap: Record<string,string> = {};
-// Load available solver flows
-(async function loadFlows() {
-  try {
-    const resp = await axios.get(`${SOLVER_URL}/flows`);
+// Dynamic solver flows mapping
+const flowMap: Record<string,string> = {};
+// Fetch flows once and cache
+const flowsPromise = axios.get(`${SOLVER_URL}/flows`)
+  .then(resp => {
     resp.data.flows.forEach((f: any) => {
       flowMap[f.id] = f.endpoint;
     });
     console.log('Loaded solver flows:', Object.keys(flowMap));
-  } catch (err) {
-    const e: any = err;
-    console.error('Could not load solver flows:', e.message || e);
-  }
-})();
+  })
+  .catch((err: any) => {
+    console.error('Could not load solver flows:', err.message || err);
+  });
 
 app.post('/mcp/submit', async (req, res) => {
   const mcp: MCP = req.body;
@@ -69,6 +67,7 @@ app.post('/mcp/submit', async (req, res) => {
         results.push({ step, agent: 'ModelBuilderAgent', result: { message: 'Model built (mock)' } });
       } else if (step.action === 'solve_model') {
         // Call solver-service using dynamic flows
+        await flowsPromise;
         const problemType = mcp.context?.problemType || mcp.model?.problemType || '';
         const endpoint = flowMap[problemType] || '/solve';
         const solverRes = await axios.post(`${SOLVER_URL}${endpoint}`, mcp.model);
@@ -99,6 +98,10 @@ app.post('/mcp/submit', async (req, res) => {
 });
 
 app.get('/health', (_req, res) => {
+  res.json({ status: 'healthy' });
+});
+// Alternative health endpoint for K8s
+app.get('/healthz', (_req, res) => {
   res.json({ status: 'healthy' });
 });
 

@@ -20,22 +20,19 @@ app.use((0, cors_1.default)({
 }));
 // Environment variable for solver-service URL
 const SOLVER_URL = process.env.SOLVER_SERVICE_URL || 'http://localhost:8080';
-// Dynamic flows mapping (populated at startup)
-let flowMap = {};
-// Load available solver flows
-(async function loadFlows() {
-    try {
-        const resp = await axios_1.default.get(`${SOLVER_URL}/flows`);
-        resp.data.flows.forEach((f) => {
-            flowMap[f.id] = f.endpoint;
-        });
-        console.log('Loaded solver flows:', Object.keys(flowMap));
-    }
-    catch (err) {
-        const e = err;
-        console.error('Could not load solver flows:', e.message || e);
-    }
-})();
+// Dynamic solver flows mapping
+const flowMap = {};
+// Fetch flows once and cache
+const flowsPromise = axios_1.default.get(`${SOLVER_URL}/flows`)
+    .then(resp => {
+    resp.data.flows.forEach((f) => {
+        flowMap[f.id] = f.endpoint;
+    });
+    console.log('Loaded solver flows:', Object.keys(flowMap));
+})
+    .catch((err) => {
+    console.error('Could not load solver flows:', err.message || err);
+});
 app.post('/mcp/submit', async (req, res) => {
     var _a, _b;
     const mcp = req.body;
@@ -54,6 +51,7 @@ app.post('/mcp/submit', async (req, res) => {
             }
             else if (step.action === 'solve_model') {
                 // Call solver-service using dynamic flows
+                await flowsPromise;
                 const problemType = ((_a = mcp.context) === null || _a === void 0 ? void 0 : _a.problemType) || ((_b = mcp.model) === null || _b === void 0 ? void 0 : _b.problemType) || '';
                 const endpoint = flowMap[problemType] || '/solve';
                 const solverRes = await axios_1.default.post(`${SOLVER_URL}${endpoint}`, mcp.model);
